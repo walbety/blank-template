@@ -1,0 +1,163 @@
+plugins {
+	id 'org.springframework.boot' version '2.6.7'
+	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+	id 'java'
+	id 'com.github.sherter.google-java-format' version '0.9'
+	id 'org.flywaydb.flyway' version '6.5.1'
+	id 'jacoco'
+	id 'idea'
+}
+
+googleJavaFormat {
+	toolVersion = '1.15.0'
+}
+
+ext {
+	set('mapstructVersion', '1.5.0.RC1')
+	set('lombokMapstructBindingVersion', '0.2.0')
+	set('fixtureFactoryVersion', '3.1.0')
+	set('restAssuredVersion', '4.2.0')
+	set('assertjVersion', '3.21.0')
+	set('wiremockStandaloneVersion', '2.27.2')
+}
+
+
+group = 'com.walbety'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '17'
+targetCompatibility = '17'
+
+repositories {
+	mavenCentral()
+	maven {
+		url "https://repo.spring.io/release"
+	}
+	maven {
+		url "https://repository.jboss.org/maven2"
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+dependencies {
+
+	annotationProcessor 'org.projectlombok:lombok'
+	annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+	annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
+
+	compileOnly 'org.projectlombok:lombok'
+
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa:2.6.7'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.2'
+	implementation 'org.apache.commons:commons-lang3:3.12.0'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+
+	implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.hibernate:hibernate-core'
+	implementation 'org.springdoc:springdoc-openapi-ui:1.5.10'
+
+	runtimeOnly 'org.postgresql:postgresql'
+
+	testImplementation "br.com.six2six:fixture-factory:${fixtureFactoryVersion}"
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+	testImplementation "org.assertj:assertj-core:${assertjVersion}"
+	testImplementation "com.github.tomakehurst:wiremock-standalone:${wiremockStandaloneVersion}"
+	testAnnotationProcessor 'org.projectlombok:lombok'
+	testCompileOnly 'org.projectlombok:lombok'
+}
+
+test {
+	useJUnitPlatform {
+		if (!(System.getProperty("includeTags") ?: "").isBlank()) {
+			includeTags System.getProperty("includeTags")
+		}
+
+		if (!(System.getProperty("excludeTags") ?: "").isBlank()) {
+			excludeTags System.getProperty("excludeTags")
+		}
+
+		excludeTags "ComponentTest"
+	}
+}
+
+def testComponent = tasks.register("testComponent", Test) {
+	useJUnitPlatform {
+		includeTags "ComponentTest"
+	}
+	shouldRunAfter test
+
+	ignoreFailures = false
+}
+
+def allTest = tasks.register("allTest", Test) {
+	dependsOn test, testComponent
+
+	reports.html.required = false
+	ignoreFailures = false
+
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+	dependsOn test, testComponent
+
+	getExecutionData().setFrom(fileTree(buildDir).include("/jacoco/*.exec"))
+}
+
+sourceSets {
+	testIntegration {
+		java {
+			srcDir 'src/testIntegration/java'
+		}
+		compileClasspath += main.output + test.output
+		runtimeClasspath += main.output + test.output
+		resources.srcDir 'src/testIntegration/resources'
+	}
+}
+
+idea {
+	module {
+		testSourceDirs += sourceSets.testIntegration.java.srcDirs
+		testResourceDirs += sourceSets.testIntegration.resources.srcDirs
+
+	}
+}
+
+configurations {
+	testIntegrationCompile.extendsFrom testCompile
+	testIntegrationRuntime.extendsFrom testRuntime
+	testIntegrationRuntimeOnly.extendsFrom testRuntimeOnly
+	testIntegrationImplementation.extendsFrom testImplementation
+}
+
+task testIntegration(type: Test) {
+	testClassesDirs = sourceSets.testIntegration.output.classesDirs
+	classpath = sourceSets.testIntegration.runtimeClasspath
+
+	useJUnitPlatform()
+
+	reports {
+		html.enabled true
+		junitXml.enabled = true
+	}
+}
+
+test.doFirst {
+	systemProperty 'spring.profiles.active', 'dev, test'
+}
+
+springBoot {
+	mainClass.set('com.walbety.blank.BlankApplication')
+}
